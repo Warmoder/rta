@@ -1,0 +1,2051 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RTA Pro — Аналізатор АЧХ</title>
+    <style>
+        :root {
+            --bg-main: #0b0d11;
+            --bg-panel: #131720;
+            --bg-control: #1c2230;
+            --bg-control-hover: #262f42;
+            --border: #2a3346;
+            --text-main: #e6ecf5;
+            --text-muted: #8a96ad;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --green: #00e676;
+            --yellow: #ffca28;
+            --cyan: #00d4ff;
+            --red: #ff4757;
+            --orange: #ff9f43;
+            --purple: #c084fc;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            overflow: hidden;
+        }
+
+        .app-layout {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* Header / Top Bar */
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 8px 14px;
+            background: var(--bg-panel);
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+            z-index: 10;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .brand-logo {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            background: linear-gradient(135deg, #00e676, #3b82f6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 13px;
+            color: #0b0d11;
+            letter-spacing: -0.5px;
+        }
+
+        .brand h1 {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+        }
+
+        .brand .subtitle {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .top-actions {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            flex-wrap: wrap;
+        }
+
+        /* VU Meter */
+        .vu-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            background: #0a0c10;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 4px 9px;
+            font-size: 11px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .vu-bar-bg {
+            width: 82px;
+            height: 8px;
+            background: #1a202c;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .vu-bar-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #00e676 0%, #ffca28 75%, #ff4757 95%);
+            transition: width 0.05s linear;
+        }
+
+        .vu-clip {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #2a3346;
+            transition: background 0.1s;
+        }
+        .vu-clip.active {
+            background: var(--red);
+            box-shadow: 0 0 6px var(--red);
+        }
+
+        /* Buttons & Inputs */
+        button, select {
+            background: var(--bg-control);
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 5px 10px;
+            font-size: 12.5px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-family: inherit;
+        }
+
+        button:hover, select:hover {
+            background: var(--bg-control-hover);
+            border-color: #3d4b66;
+        }
+
+        button:active { transform: translateY(1px); }
+        button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+        button.primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+            font-weight: 600;
+        }
+        button.primary:hover { background: var(--accent-hover); }
+
+        button.danger {
+            background: rgba(255, 71, 87, 0.15);
+            border-color: rgba(255, 71, 87, 0.5);
+            color: #ff6b7a;
+        }
+        button.danger:hover { background: rgba(255, 71, 87, 0.25); }
+
+        button.active-toggle {
+            background: rgba(59, 130, 246, 0.22);
+            border-color: var(--accent);
+            color: #93c5fd;
+        }
+
+        button.recording {
+            background: rgba(255, 71, 87, 0.2);
+            border-color: var(--red);
+            color: #ff6b7a;
+            font-weight: 600;
+        }
+
+        .lang-btn {
+            font-weight: 700;
+            font-size: 11.5px;
+            padding: 5px 8px;
+            letter-spacing: 0.4px;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .dot-live { background: var(--green); }
+        .dot-peak { background: var(--yellow); }
+        .dot-avg { background: var(--cyan); }
+        .dot-rec {
+            background: var(--red);
+            animation: pulse 1.2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.85); }
+        }
+
+        /* Main Canvas Workspace */
+        .workspace {
+            flex: 1;
+            position: relative;
+            background: #06080b;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #achxCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            cursor: crosshair;
+        }
+
+        /* Floating HUD Overlay */
+        .hud-overlay {
+            position: absolute;
+            top: 10px;
+            left: 58px;
+            right: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            pointer-events: none;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .hud-badges {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .hud-card {
+            background: rgba(13, 17, 24, 0.82);
+            backdrop-filter: blur(6px);
+            border: 1px solid rgba(42, 51, 70, 0.8);
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 11.5px;
+            color: var(--text-muted);
+            font-variant-numeric: tabular-nums;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .hud-card strong {
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        .hud-legend {
+            display: flex;
+            gap: 10px;
+            pointer-events: auto;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            transition: opacity 0.15s;
+        }
+        .legend-item.muted {
+            opacity: 0.35;
+            text-decoration: line-through;
+        }
+
+        /* Cursor Tooltip */
+        .cursor-tooltip {
+            position: absolute;
+            pointer-events: none;
+            background: rgba(11, 14, 20, 0.94);
+            border: 1px solid #3d4b66;
+            border-radius: 6px;
+            padding: 7px 10px;
+            font-size: 11.5px;
+            font-variant-numeric: tabular-nums;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+            display: none;
+            z-index: 20;
+            min-width: 160px;
+            line-height: 1.5;
+        }
+
+        .tooltip-freq {
+            font-weight: 700;
+            color: #fff;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 3px;
+            margin-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .tooltip-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        /* Bottom Control Deck */
+        .control-deck {
+            background: var(--bg-panel);
+            border-top: 1px solid var(--border);
+            padding: 8px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 10;
+            max-height: 44vh;
+            overflow-y: auto;
+        }
+
+        .control-deck.collapsed { display: none; }
+
+        .deck-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(42, 51, 70, 0.65);
+            border-radius: 7px;
+            padding: 5px 10px;
+            flex-wrap: wrap;
+        }
+
+        .group-label {
+            font-size: 10.5px;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: var(--text-muted);
+            font-weight: 600;
+            margin-right: 2px;
+        }
+
+        .field {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .field span.val {
+            color: var(--text-main);
+            font-variant-numeric: tabular-nums;
+            min-width: 32px;
+            text-align: right;
+            font-size: 11.5px;
+        }
+
+        input[type="range"] {
+            accent-color: var(--accent);
+            width: 78px;
+            cursor: pointer;
+        }
+
+        input[type="checkbox"] {
+            accent-color: var(--accent);
+            cursor: pointer;
+            margin: 0;
+        }
+
+        .check-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+            color: var(--text-main);
+            cursor: pointer;
+        }
+
+        /* Snapshots & Cal */
+        .snapshots-list {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .snap-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--bg-control);
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            padding: 3px 7px;
+            font-size: 11.5px;
+        }
+
+        .snap-name {
+            cursor: pointer;
+            border-bottom: 1px dashed transparent;
+        }
+        .snap-name:hover {
+            border-bottom-color: var(--text-muted);
+        }
+
+        .snap-del {
+            background: none;
+            border: none;
+            padding: 0 2px;
+            color: var(--text-muted);
+            font-size: 13px;
+            line-height: 1;
+        }
+        .snap-del:hover { color: var(--red); background: none; }
+
+        .gen-group {
+            border-color: rgba(255, 159, 67, 0.35);
+            background: rgba(255, 159, 67, 0.04);
+        }
+
+        .cal-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: rgba(192, 132, 252, 0.14);
+            border: 1px solid rgba(192, 132, 252, 0.45);
+            color: #e9d5ff;
+            border-radius: 5px;
+            padding: 2px 7px;
+            font-size: 11px;
+        }
+
+        .kbd {
+            font-size: 10px;
+            padding: 1px 4px;
+            border-radius: 3px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: var(--text-muted);
+            font-family: monospace;
+        }
+
+        /* Help Modal */
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            padding: 16px;
+        }
+        .modal-backdrop.open { display: flex; }
+
+        .modal {
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            max-width: 520px;
+            width: 100%;
+            padding: 18px 20px;
+            box-shadow: 0 16px 40px rgba(0,0,0,0.6);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+        }
+        .modal-header h2 { margin: 0; font-size: 16px; }
+        .modal-body { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+        .modal-body ul { padding-left: 18px; margin: 8px 0; }
+        .modal-body li { margin-bottom: 6px; }
+        .modal-body strong { color: var(--text-main); }
+
+        @media (max-width: 900px) {
+            .brand .subtitle { display: none; }
+            .vu-bar-bg { width: 55px; }
+        }
+    </style>
+</head>
+<body>
+<div class="app-layout" id="appRoot">
+
+    <!-- TOP TOOLBAR -->
+    <header class="topbar">
+        <div class="brand">
+            <div class="brand-logo">RTA</div>
+            <div>
+                <h1 data-i18n="appTitle">Аналізатор АЧХ Pro</h1>
+                <div class="subtitle" data-i18n="appSubtitle">Real-Time Frequency Response &amp; Acoustic Analyzer</div>
+            </div>
+        </div>
+
+        <div class="top-actions">
+            <select id="micSelect"></select>
+
+            <button id="startBtn" class="primary">
+                <span data-i18n="btnStart">🎙 Увімкнути</span> <span class="kbd">M</span>
+            </button>
+
+            <button id="pauseBtn" disabled>
+                <span data-i18n="btnPause">⏸ Пауза</span> <span class="kbd">Space</span>
+            </button>
+
+            <button id="resetBtn">
+                <span data-i18n="btnReset">↺ Скинути</span> <span class="kbd">R</span>
+            </button>
+
+            <button id="snapBtn">
+                <span data-i18n="btnSnap">📌 Знімок</span> <span class="kbd">S</span>
+            </button>
+
+            <div class="vu-wrapper" id="vuWrapper">
+                <span>IN</span>
+                <div class="vu-bar-bg"><div class="vu-bar-fill" id="vuFill"></div></div>
+                <span id="vuText" style="min-width: 44px; text-align: right;">-∞ dB</span>
+                <div class="vu-clip" id="vuClip"></div>
+            </div>
+
+            <button id="exportPngBtn" title="PNG">📷 PNG</button>
+            <button id="exportCsvBtn" title="CSV">📊 CSV</button>
+            <button id="toggleDeckBtn" class="active-toggle" data-i18n="btnPanel">⚙ Панель</button>
+            <button id="langBtn" class="lang-btn" title="Switch language / Змінити мову">UA</button>
+            <button id="helpBtn" title="Help / Довідка">?</button>
+            <button id="fullscreenBtn" title="Fullscreen (F)">⛶</button>
+        </div>
+    </header>
+
+    <!-- MAIN GRAPH WORKSPACE -->
+    <main class="workspace" id="workspace">
+        <canvas id="achxCanvas"></canvas>
+
+        <!-- HUD Overlay -->
+        <div class="hud-overlay">
+            <div class="hud-badges">
+                <div class="hud-card">
+                    <span data-i18n="hudStatus">Статус:</span> <strong id="statusText">—</strong>
+                </div>
+                <div class="hud-card">
+                    <span data-i18n="hudPeakFreq">Макс. частота:</span> <strong id="domFreqText">—</strong>
+                </div>
+                <div class="hud-card" id="hudInfo" style="display:none;">
+                    <span id="srText">48 kHz</span> · <span id="resText">5.8 Hz/bin</span>
+                </div>
+            </div>
+
+            <div class="hud-card hud-legend">
+                <div class="legend-item" data-curve="live">
+                    <span class="dot dot-live"></span> <span data-i18n="legLive">Жива</span>
+                </div>
+                <div class="legend-item" data-curve="peak">
+                    <span class="dot dot-peak"></span> <span data-i18n="legPeak">Пік (АЧХ)</span>
+                </div>
+                <div class="legend-item" data-curve="avg">
+                    <span class="dot dot-avg"></span> <span data-i18n="legAvg">Середнє</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hover Crosshair Tooltip -->
+        <div class="cursor-tooltip" id="cursorTooltip"></div>
+    </main>
+
+    <!-- BOTTOM CONTROL DECK -->
+    <section class="control-deck" id="controlDeck">
+        <!-- Row 1: Analysis, View, Scale -->
+        <div class="deck-row">
+            <div class="control-group">
+                <span class="group-label" data-i18n="grpAnalysis">Аналіз</span>
+                <div class="field">
+                    <label for="fftSelect">FFT:</label>
+                    <select id="fftSelect">
+                        <option value="2048">2048</option>
+                        <option value="4096">4096</option>
+                        <option value="8192" selected>8192</option>
+                        <option value="16384">16384</option>
+                        <option value="32768">32768</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="octSmoothSelect" data-i18n="lblSmooth">Згладж.:</label>
+                    <select id="octSmoothSelect">
+                        <option value="0" data-i18n="optRaw">Без (Raw)</option>
+                        <option value="24">1/24 oct</option>
+                        <option value="12" selected>1/12 oct</option>
+                        <option value="6">1/6 oct</option>
+                        <option value="3">1/3 oct</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="timeSmoothRange" data-i18n="lblInertia">Інерція:</label>
+                    <input type="range" id="timeSmoothRange" min="0" max="0.95" step="0.05" value="0.65">
+                    <span class="val" id="timeSmoothVal">0.65</span>
+                </div>
+                <label class="check-label">
+                    <input type="checkbox" id="pinkTiltCheck"> <span data-i18n="lblPinkTilt">+3 дБ/окт (Pink)</span>
+                </label>
+            </div>
+
+            <div class="control-group">
+                <span class="group-label" data-i18n="grpView">Вигляд</span>
+                <div class="field">
+                    <select id="viewModeSelect">
+                        <option value="line" selected data-i18n="optLine">Лінія + заливка</option>
+                        <option value="bars" data-i18n="optBars">1/3 Окт. стовпці</option>
+                        <option value="both" data-i18n="optBoth">Лінія + Стовпці</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <select id="peakModeSelect">
+                        <option value="hold" selected data-i18n="optPeakHold">Пік: Тримати (∞)</option>
+                        <option value="decay" data-i18n="optPeakDecay">Пік: Спад</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <select id="targetCurveSelect" title="Target Curve">
+                        <option value="none" selected data-i18n="optTargetNone">Ціль: Немає</option>
+                        <option value="flat" data-i18n="optTargetFlat">Ціль: Рівна (Flat)</option>
+                        <option value="harman" data-i18n="optTargetHarman">Ціль: Harman (+4дБ бас)</option>
+                        <option value="warm" data-i18n="optTargetWarm">Ціль: Тепла (House)</option>
+                    </select>
+                </div>
+                <label class="check-label">
+                    <input type="checkbox" id="bandsCheck" checked> <span data-i18n="lblBands">Зони</span>
+                </label>
+                <label class="check-label">
+                    <input type="checkbox" id="peakMarkersCheck"> <span data-i18n="lblPeakMarkers">Мітки піків</span>
+                </label>
+            </div>
+
+            <div class="control-group">
+                <span class="group-label" data-i18n="grpScale">Шкала</span>
+                <div class="field">
+                    <select id="freqPresetSelect">
+                        <option value="20-20000" selected data-i18n="optFreqFull">20 – 20k Гц</option>
+                        <option value="20-500" data-i18n="optFreqBass">20 – 500 Гц (Бас)</option>
+                        <option value="100-8000" data-i18n="optFreqMid">100 – 8k Гц (Вокал)</option>
+                        <option value="10-22000">10 – 22k Гц</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="minDbRange" data-i18n="lblMin">Мін:</label>
+                    <input type="range" id="minDbRange" min="-120" max="-50" step="5" value="-100" style="width:60px;">
+                    <span class="val" id="minDbVal">-100</span>
+                </div>
+                <div class="field">
+                    <label for="maxDbRange" data-i18n="lblMax">Макс:</label>
+                    <input type="range" id="maxDbRange" min="-40" max="0" step="5" value="-10" style="width:60px;">
+                    <span class="val" id="maxDbVal">-10</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Row 2: Generator, Calibration, Snapshots -->
+        <div class="deck-row">
+            <div class="control-group gen-group">
+                <span class="group-label" style="color: var(--orange);" data-i18n="grpGen">Генератор</span>
+                <select id="genTypeSelect">
+                    <option value="pink" data-i18n="optGenPink">Рожевий шум</option>
+                    <option value="white" data-i18n="optGenWhite">Білий шум</option>
+                    <option value="sweep" data-i18n="optGenSweep">Свіп (20→20k)</option>
+                    <option value="sine" data-i18n="optGenSine">Синус (тон)</option>
+                </select>
+                <button id="genToggleBtn" data-i18n="btnGenStart">▶ Старт</button>
+                <div class="field" id="genFreqField" style="display:none;">
+                    <input type="range" id="genFreqRange" min="20" max="10000" step="1" value="1000" style="width:85px;">
+                    <span class="val" id="genFreqVal" style="min-width:46px;">1000 Hz</span>
+                </div>
+                <div class="field" id="genSweepField" style="display:none;">
+                    <select id="sweepDurSelect">
+                        <option value="5">5 s</option>
+                        <option value="10" selected>10 s</option>
+                        <option value="20">20 s</option>
+                    </select>
+                    <label class="check-label" title="Auto-reset peaks on sweep start">
+                        <input type="checkbox" id="autoResetSweepCheck" checked> <span data-i18n="lblAutoReset">Авто-скид</span>
+                    </label>
+                </div>
+                <div class="field">
+                    <label for="genVolRange" data-i18n="lblVol">Гучн.:</label>
+                    <input type="range" id="genVolRange" min="-48" max="-3" step="1" value="-20" style="width:65px;">
+                    <span class="val" id="genVolVal">-20 dB</span>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <span class="group-label" data-i18n="grpCal">Калібрування</span>
+                <input type="file" id="calFileInput" accept=".cal,.txt,.csv" style="display:none;">
+                <button id="loadCalBtn" data-i18n="btnLoadCal">📂 .cal файл</button>
+                <span id="calBadgeArea"></span>
+            </div>
+
+            <div class="control-group" style="flex: 1; min-width: 220px;">
+                <span class="group-label" data-i18n="grpSnaps">Знімки</span>
+                <div class="snapshots-list" id="snapshotsList"></div>
+            </div>
+        </div>
+    </section>
+
+</div>
+
+<!-- HELP MODAL -->
+<div class="modal-backdrop" id="helpModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 data-i18n="helpTitle">Довідка та гарячі клавіші</h2>
+            <button id="closeHelpBtn">✕</button>
+        </div>
+        <div class="modal-body" id="helpBody"></div>
+    </div>
+</div>
+
+<script>
+(() => {
+    // ================= LOCALIZATION =================
+    const I18N = {
+        uk: {
+            appTitle: 'Аналізатор АЧХ Pro',
+            appSubtitle: 'Аналізатор частотної характеристики в реальному часі',
+            micDefault: 'Мікрофон (за замовч.)',
+            btnStart: '🎙 Увімкнути',
+            btnStop: 'Стоп',
+            btnPause: '⏸ Пауза',
+            btnResume: '▶ Продовж.',
+            btnReset: '↺ Скинути',
+            btnSnap: '📌 Знімок',
+            btnPanel: '⚙ Панель',
+            hudStatus: 'Статус:',
+            hudPeakFreq: 'Макс. частота:',
+            statusIdle: 'Очікування',
+            statusActive: 'Активний',
+            statusPaused: 'Пауза (Заморожено)',
+            statusStopped: 'Зупинено',
+            legLive: 'Жива',
+            legPeak: 'Пік (АЧХ)',
+            legAvg: 'Середнє',
+            grpAnalysis: 'Аналіз',
+            lblSmooth: 'Згладж.:',
+            optRaw: 'Без (Raw)',
+            lblInertia: 'Інерція:',
+            lblPinkTilt: '+3 дБ/окт (Pink)',
+            grpView: 'Вигляд',
+            optLine: 'Лінія + заливка',
+            optBars: '1/3 Окт. стовпці',
+            optBoth: 'Лінія + Стовпці',
+            optPeakHold: 'Пік: Тримати (∞)',
+            optPeakDecay: 'Пік: Спад',
+            optTargetNone: 'Ціль: Немає',
+            optTargetFlat: 'Ціль: Рівна (Flat)',
+            optTargetHarman: 'Ціль: Harman (+4дБ бас)',
+            optTargetWarm: 'Ціль: Тепла (House)',
+            lblBands: 'Зони',
+            lblPeakMarkers: 'Мітки піків',
+            grpScale: 'Шкала',
+            optFreqFull: '20 – 20k Гц',
+            optFreqBass: '20 – 500 Гц (Бас)',
+            optFreqMid: '100 – 8k Гц (Вокал)',
+            lblMin: 'Мін:',
+            lblMax: 'Макс:',
+            grpGen: 'Генератор',
+            optGenPink: 'Рожевий шум',
+            optGenWhite: 'Білий шум',
+            optGenSweep: 'Свіп (20→20k)',
+            optGenSine: 'Синус (тон)',
+            btnGenStart: '▶ Старт',
+            btnGenStop: '⏹ Стоп',
+            lblAutoReset: 'Авто-скид',
+            lblVol: 'Гучн.:',
+            grpCal: 'Калібрування',
+            btnLoadCal: '📂 .cal файл',
+            grpSnaps: 'Знімки',
+            snapEmpty: 'Натисніть «📌 Знімок» або S (клік по назві — перейменувати)',
+            snapPrefix: 'Знімок',
+            renamePrompt: 'Нова назва знімка:',
+            tooltipCursor: 'Курсор:',
+            targetDragHint: 'тягніть вгору/вниз',
+            bands: ['Саб', 'Бас', 'Ниж. сер.', 'Середні', 'Верх. сер.', 'Присутн.', 'Високі'],
+            micError: 'Не вдалося отримати доступ до мікрофона. Перевірте дозволи браузера.\n\nДеталі: ',
+            calError: 'Не вдалося прочитати .cal файл. Очікується формат "частота дБ" (як у REW / UMIK-1).',
+            helpTitle: 'Довідка та гарячі клавіші',
+            helpHtml: `
+                <ul>
+                    <li><strong>M</strong> — Увімкнути / зупинити мікрофон</li>
+                    <li><strong>Space</strong> — Пауза / заморозити графік</li>
+                    <li><strong>R</strong> — Скинути піки та середню криву</li>
+                    <li><strong>S</strong> — Зберегти знімок поточної кривої (до 4 шт., клік по назві — перейменувати)</li>
+                    <li><strong>F</strong> — Повноекранний режим</li>
+                    <li><strong>Колесо миші на графіку</strong> — масштабування шкали дБ (<strong>Подвійний клік</strong> — скинути масштаб)</li>
+                    <li><strong>Цільова крива</strong> — увімкніть Flat/Harman/House та перетягуйте її мишею по вертикалі</li>
+                    <li><strong>Калібрування (.cal)</strong> — завантажте файл калібрування мікрофона (UMIK-1, Dayton, REW) для точної компенсації АЧХ</li>
+                </ul>`
+        },
+        en: {
+            appTitle: 'RTA Analyzer Pro',
+            appSubtitle: 'Real-Time Frequency Response & Acoustic Analyzer',
+            micDefault: 'Microphone (default)',
+            btnStart: '🎙 Start Mic',
+            btnStop: 'Stop',
+            btnPause: '⏸ Pause',
+            btnResume: '▶ Resume',
+            btnReset: '↺ Reset',
+            btnSnap: '📌 Snapshot',
+            btnPanel: '⚙ Panel',
+            hudStatus: 'Status:',
+            hudPeakFreq: 'Peak Freq:',
+            statusIdle: 'Idle',
+            statusActive: 'Active',
+            statusPaused: 'Paused (Frozen)',
+            statusStopped: 'Stopped',
+            legLive: 'Live',
+            legPeak: 'Peak Hold',
+            legAvg: 'Average',
+            grpAnalysis: 'Analysis',
+            lblSmooth: 'Smooth:',
+            optRaw: 'None (Raw)',
+            lblInertia: 'Decay:',
+            lblPinkTilt: '+3 dB/oct (Pink)',
+            grpView: 'View',
+            optLine: 'Line + Fill',
+            optBars: '1/3 Oct Bars',
+            optBoth: 'Line + Bars',
+            optPeakHold: 'Peak: Hold (∞)',
+            optPeakDecay: 'Peak: Decay',
+            optTargetNone: 'Target: None',
+            optTargetFlat: 'Target: Flat',
+            optTargetHarman: 'Target: Harman (+4dB)',
+            optTargetWarm: 'Target: Warm House',
+            lblBands: 'Bands',
+            lblPeakMarkers: 'Peak Markers',
+            grpScale: 'Scale',
+            optFreqFull: '20 – 20k Hz',
+            optFreqBass: '20 – 500 Hz (Bass)',
+            optFreqMid: '100 – 8k Hz (Vocal)',
+            lblMin: 'Min:',
+            lblMax: 'Max:',
+            grpGen: 'Generator',
+            optGenPink: 'Pink Noise',
+            optGenWhite: 'White Noise',
+            optGenSweep: 'Log Sweep (20→20k)',
+            optGenSine: 'Sine Tone',
+            btnGenStart: '▶ Start',
+            btnGenStop: '⏹ Stop',
+            lblAutoReset: 'Auto-reset',
+            lblVol: 'Vol:',
+            grpCal: 'Calibration',
+            btnLoadCal: '📂 .cal file',
+            grpSnaps: 'Snapshots',
+            snapEmpty: 'Press "📌 Snapshot" or S (click name to rename)',
+            snapPrefix: 'Snap',
+            renamePrompt: 'New snapshot name:',
+            tooltipCursor: 'Cursor:',
+            targetDragHint: 'drag up/down',
+            bands: ['Sub', 'Bass', 'Low-Mid', 'Mid', 'Upper-Mid', 'Presence', 'Brilliance'],
+            micError: 'Could not access microphone. Please check browser permissions.\n\nDetails: ',
+            calError: 'Could not parse .cal file. Expected "freq dB" lines (REW / UMIK-1 format).',
+            helpTitle: 'Help & Keyboard Shortcuts',
+            helpHtml: `
+                <ul>
+                    <li><strong>M</strong> — Start / Stop microphone</li>
+                    <li><strong>Space</strong> — Pause / Freeze graph</li>
+                    <li><strong>R</strong> — Reset Peak &amp; Average curves</li>
+                    <li><strong>S</strong> — Save snapshot of current curve (up to 4; click name to rename)</li>
+                    <li><strong>F</strong> — Fullscreen mode</li>
+                    <li><strong>Mouse Wheel on graph</strong> — zoom dB scale (<strong>Double-click</strong> to reset zoom)</li>
+                    <li><strong>Target Curve</strong> — enable Flat/Harman/House and drag vertically on the graph</li>
+                    <li><strong>Calibration (.cal)</strong> — load a mic calibration file (UMIK-1, Dayton, REW) for accurate compensation</li>
+                </ul>`
+        }
+    };
+
+    let lang = 'uk';
+    const t = key => (I18N[lang] && I18N[lang][key]) || key;
+
+    // ================= DOM ELEMENTS =================
+    const canvas = document.getElementById('achxCanvas');
+    const ctx = canvas.getContext('2d');
+    const workspace = document.getElementById('workspace');
+    const cursorTooltip = document.getElementById('cursorTooltip');
+
+    const micSelect = document.getElementById('micSelect');
+    const startBtn = document.getElementById('startBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const snapBtn = document.getElementById('snapBtn');
+    const exportPngBtn = document.getElementById('exportPngBtn');
+    const exportCsvBtn = document.getElementById('exportCsvBtn');
+    const toggleDeckBtn = document.getElementById('toggleDeckBtn');
+    const langBtn = document.getElementById('langBtn');
+    const helpBtn = document.getElementById('helpBtn');
+    const helpModal = document.getElementById('helpModal');
+    const closeHelpBtn = document.getElementById('closeHelpBtn');
+    const helpBody = document.getElementById('helpBody');
+    const fullscreenBtn = document.getElementById('fullscreenBtn');
+    const controlDeck = document.getElementById('controlDeck');
+
+    const vuFill = document.getElementById('vuFill');
+    const vuText = document.getElementById('vuText');
+    const vuClip = document.getElementById('vuClip');
+    const statusText = document.getElementById('statusText');
+    const domFreqText = document.getElementById('domFreqText');
+    const hudInfo = document.getElementById('hudInfo');
+    const srText = document.getElementById('srText');
+    const resText = document.getElementById('resText');
+
+    const fftSelect = document.getElementById('fftSelect');
+    const octSmoothSelect = document.getElementById('octSmoothSelect');
+    const timeSmoothRange = document.getElementById('timeSmoothRange');
+    const timeSmoothVal = document.getElementById('timeSmoothVal');
+    const pinkTiltCheck = document.getElementById('pinkTiltCheck');
+    const viewModeSelect = document.getElementById('viewModeSelect');
+    const peakModeSelect = document.getElementById('peakModeSelect');
+    const targetCurveSelect = document.getElementById('targetCurveSelect');
+    const bandsCheck = document.getElementById('bandsCheck');
+    const peakMarkersCheck = document.getElementById('peakMarkersCheck');
+    const freqPresetSelect = document.getElementById('freqPresetSelect');
+    const minDbRange = document.getElementById('minDbRange');
+    const minDbVal = document.getElementById('minDbVal');
+    const maxDbRange = document.getElementById('maxDbRange');
+    const maxDbVal = document.getElementById('maxDbVal');
+
+    const genTypeSelect = document.getElementById('genTypeSelect');
+    const genToggleBtn = document.getElementById('genToggleBtn');
+    const genFreqField = document.getElementById('genFreqField');
+    const genFreqRange = document.getElementById('genFreqRange');
+    const genFreqVal = document.getElementById('genFreqVal');
+    const genSweepField = document.getElementById('genSweepField');
+    const sweepDurSelect = document.getElementById('sweepDurSelect');
+    const autoResetSweepCheck = document.getElementById('autoResetSweepCheck');
+    const genVolRange = document.getElementById('genVolRange');
+    const genVolVal = document.getElementById('genVolVal');
+
+    const calFileInput = document.getElementById('calFileInput');
+    const loadCalBtn = document.getElementById('loadCalBtn');
+    const calBadgeArea = document.getElementById('calBadgeArea');
+    const snapshotsList = document.getElementById('snapshotsList');
+
+    // ================= STATE =================
+    let audioCtx = null;
+    let analyser = null;
+    let micStream = null;
+    let micSource = null;
+    let isRunning = false;
+    let isPaused = false;
+    let animId = null;
+
+    let rawFreqData = null;
+    let timeData = null;
+    let peakData = null;
+    let avgSumData = null;
+    let avgCount = 0;
+
+    const GRID_POINTS = 480;
+    let gridFreqs = new Float32Array(GRID_POINTS);
+    let dispLive = new Float32Array(GRID_POINTS);
+    let dispPeak = new Float32Array(GRID_POINTS);
+    let dispAvg = new Float32Array(GRID_POINTS);
+
+    // Calibration data: array of { f, db } sorted by f
+    let calData = null;
+    let calName = '';
+    let calGridOffsets = new Float32Array(GRID_POINTS);
+
+    const SNAP_COLORS = ['#ff6b9d', '#c084fc', '#fb923c', '#34d399'];
+    let snapshots = [];
+    const curveVis = { live: true, peak: true, avg: true };
+
+    const PAD = { top: 34, right: 20, bottom: 32, left: 52 };
+    let canvasW = 900, canvasH = 450, dpr = 1;
+
+    const settings = {
+        lang: 'uk',
+        fftSize: 8192,
+        octSmooth: 12,
+        timeSmooth: 0.65,
+        pinkTilt: false,
+        viewMode: 'line',
+        peakMode: 'hold',
+        targetCurve: 'none',
+        targetOffsetDb: -40,
+        showBands: true,
+        showPeakMarkers: false,
+        minFreq: 20,
+        maxFreq: 20000,
+        minDb: -100,
+        maxDb: -10
+    };
+
+    let mouse = { x: -1, y: -1, inside: false };
+    let draggingTarget = false;
+
+    // Generator
+    let genCtx = null;
+    let genNodes = null;
+    let genRunning = false;
+    let sweepTimer = null;
+
+    // ================= APPLY LOCALIZATION =================
+    function applyLocalization() {
+        document.documentElement.lang = lang;
+        document.title = `RTA Pro — ${t('appTitle')}`;
+        langBtn.textContent = lang.toUpperCase();
+
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+            if (I18N[lang][key] !== undefined) {
+                el.textContent = I18N[lang][key];
+            }
+        });
+
+        // Dynamic button states
+        if (isRunning) {
+            startBtn.innerHTML = `<span class="dot dot-rec"></span><span>${t('btnStop')}</span> <span class="kbd">M</span>`;
+        } else {
+            startBtn.innerHTML = `<span>${t('btnStart')}</span> <span class="kbd">M</span>`;
+        }
+
+        if (isPaused) {
+            pauseBtn.innerHTML = `<span>${t('btnResume')}</span> <span class="kbd">Space</span>`;
+            statusText.textContent = t('statusPaused');
+        } else if (isRunning) {
+            pauseBtn.innerHTML = `<span>${t('btnPause')}</span> <span class="kbd">Space</span>`;
+            statusText.textContent = t('statusActive');
+        } else {
+            pauseBtn.innerHTML = `<span>${t('btnPause')}</span> <span class="kbd">Space</span>`;
+            statusText.textContent = t('statusIdle');
+        }
+
+        genToggleBtn.textContent = genRunning ? t('btnGenStop') : t('btnGenStart');
+        helpBody.innerHTML = t('helpHtml');
+
+        if (micSelect.options.length > 0 && micSelect.options[0].value === '') {
+            micSelect.options[0].textContent = t('micDefault');
+        }
+
+        renderSnapshotsUI();
+        renderFrame();
+    }
+
+    // ================= HELPERS =================
+    const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    function freqToNote(freq) {
+        if (!freq || freq < 16) return '';
+        const midi = Math.round(69 + 12 * Math.log2(freq / 440));
+        return `${NOTE_NAMES[((midi % 12) + 12) % 12]}${Math.floor(midi / 12) - 1}`;
+    }
+
+    function formatFreq(f) {
+        if (f >= 1000) return (f / 1000).toFixed(f >= 10000 ? 1 : 2) + ' kHz';
+        return Math.round(f) + ' Hz';
+    }
+
+    function rebuildGridFreqs() {
+        const minL = Math.log10(settings.minFreq);
+        const maxL = Math.log10(settings.maxFreq);
+        for (let i = 0; i < GRID_POINTS; i++) {
+            gridFreqs[i] = Math.pow(10, minL + (i / (GRID_POINTS - 1)) * (maxL - minL));
+        }
+        dispLive.fill(settings.minDb);
+        dispPeak.fill(settings.minDb);
+        dispAvg.fill(settings.minDb);
+        rebuildCalGrid();
+    }
+
+    function rebuildCalGrid() {
+        calGridOffsets.fill(0);
+        if (!calData || calData.length < 2) return;
+        for (let i = 0; i < GRID_POINTS; i++) {
+            const f = gridFreqs[i];
+            if (f <= calData[0].f) {
+                calGridOffsets[i] = calData[0].db;
+            } else if (f >= calData[calData.length - 1].f) {
+                calGridOffsets[i] = calData[calData.length - 1].db;
+            } else {
+                // Binary search
+                let lo = 0, hi = calData.length - 1;
+                while (hi - lo > 1) {
+                    const mid = (lo + hi) >> 1;
+                    if (calData[mid].f <= f) lo = mid; else hi = mid;
+                }
+                const frac = (f - calData[lo].f) / (calData[hi].f - calData[lo].f);
+                calGridOffsets[i] = calData[lo].db + frac * (calData[hi].db - calData[lo].db);
+            }
+        }
+    }
+
+    function getTargetDbAt(freq) {
+        const base = settings.targetOffsetDb;
+        if (settings.targetCurve === 'flat') return base;
+        if (settings.targetCurve === 'harman') {
+            // Smooth +4 dB bass shelf below ~120 Hz, gentle -1 dB roll-off above 10 kHz
+            const bassBoost = 4 / (1 + Math.pow(freq / 110, 2.2));
+            const trebleRoll = freq > 8000 ? -1.5 * Math.log2(freq / 8000) : 0;
+            return base + bassBoost + trebleRoll;
+        }
+        if (settings.targetCurve === 'warm') {
+            // Gentle -0.6 dB/oct house curve pivoted at 1 kHz
+            return base - 0.6 * Math.log2(freq / 1000);
+        }
+        return base;
+    }
+
+    function getX(freq) {
+        const plotW = canvasW - PAD.left - PAD.right;
+        const minL = Math.log10(settings.minFreq);
+        const maxL = Math.log10(settings.maxFreq);
+        const tVal = (Math.log10(Math.max(freq, settings.minFreq)) - minL) / (maxL - minL);
+        return PAD.left + Math.max(0, Math.min(1, tVal)) * plotW;
+    }
+
+    function getFreqFromX(x) {
+        const plotW = canvasW - PAD.left - PAD.right;
+        const tVal = Math.max(0, Math.min(1, (x - PAD.left) / plotW));
+        const minL = Math.log10(settings.minFreq);
+        const maxL = Math.log10(settings.maxFreq);
+        return Math.pow(10, minL + tVal * (maxL - minL));
+    }
+
+    function getY(db) {
+        const plotH = canvasH - PAD.top - PAD.bottom;
+        const tVal = (db - settings.minDb) / (settings.maxDb - settings.minDb);
+        return PAD.top + plotH * (1 - Math.max(0, Math.min(1, tVal)));
+    }
+
+    function getDbFromY(y) {
+        const plotH = canvasH - PAD.top - PAD.bottom;
+        const tVal = 1 - (y - PAD.top) / plotH;
+        return settings.minDb + tVal * (settings.maxDb - settings.minDb);
+    }
+
+    // ================= PERSISTENCE =================
+    function saveSettings() {
+        try { localStorage.setItem('rta_pro_settings_v2', JSON.stringify(settings)); } catch(e) {}
+    }
+
+    function loadSettings() {
+        try {
+            const saved = JSON.parse(localStorage.getItem('rta_pro_settings_v2'));
+            if (saved) Object.assign(settings, saved);
+        } catch(e) {}
+
+        lang = settings.lang || 'uk';
+        fftSelect.value = settings.fftSize;
+        octSmoothSelect.value = settings.octSmooth;
+        timeSmoothRange.value = settings.timeSmooth;
+        timeSmoothVal.textContent = Number(settings.timeSmooth).toFixed(2);
+        pinkTiltCheck.checked = settings.pinkTilt;
+        viewModeSelect.value = settings.viewMode;
+        peakModeSelect.value = settings.peakMode;
+        targetCurveSelect.value = settings.targetCurve;
+        bandsCheck.checked = settings.showBands;
+        peakMarkersCheck.checked = settings.showPeakMarkers;
+        freqPresetSelect.value = `${settings.minFreq}-${settings.maxFreq}`;
+        minDbRange.value = settings.minDb;
+        minDbVal.textContent = settings.minDb;
+        maxDbRange.value = settings.maxDb;
+        maxDbVal.textContent = settings.maxDb;
+    }
+
+    // ================= CANVAS RESIZE =================
+    function resizeCanvas() {
+        const rect = workspace.getBoundingClientRect();
+        dpr = window.devicePixelRatio || 1;
+        canvasW = Math.max(300, Math.floor(rect.width));
+        canvasH = Math.max(200, Math.floor(rect.height));
+        canvas.width = Math.floor(canvasW * dpr);
+        canvas.height = Math.floor(canvasH * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        renderFrame();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    // ================= MICROPHONE & AUDIO =================
+    async function populateMics() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const mics = devices.filter(d => d.kind === 'audioinput');
+            const current = micSelect.value;
+            micSelect.innerHTML = `<option value="">${t('micDefault')}</option>`;
+            mics.forEach((m, idx) => {
+                const opt = document.createElement('option');
+                opt.value = m.deviceId;
+                opt.textContent = m.label || `Mic ${idx + 1}`;
+                micSelect.appendChild(opt);
+            });
+            if (current) micSelect.value = current;
+        } catch (e) {}
+    }
+
+    async function startMic() {
+        if (isRunning) { stopMic(); return; }
+        try {
+            const audioConstraints = {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false
+            };
+            if (micSelect.value) audioConstraints.deviceId = { exact: micSelect.value };
+
+            micStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+            populateMics();
+
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioCtx.createAnalyser();
+            analyser.fftSize = settings.fftSize;
+            analyser.minDecibels = -130;
+            analyser.maxDecibels = 0;
+            analyser.smoothingTimeConstant = settings.timeSmooth;
+
+            micSource = audioCtx.createMediaStreamSource(micStream);
+            micSource.connect(analyser);
+
+            initAudioBuffers();
+
+            isRunning = true;
+            isPaused = false;
+            startBtn.className = 'recording';
+            pauseBtn.disabled = false;
+            statusText.style.color = 'var(--green)';
+            hudInfo.style.display = 'flex';
+            srText.textContent = (audioCtx.sampleRate / 1000).toFixed(1) + ' kHz';
+            resText.textContent = (audioCtx.sampleRate / analyser.fftSize).toFixed(1) + ' Hz/bin';
+
+            applyLocalization();
+            loop();
+        } catch (err) {
+            alert(t('micError') + err.message);
+        }
+    }
+
+    function stopMic() {
+        if (animId) cancelAnimationFrame(animId);
+        animId = null;
+        if (micStream) { micStream.getTracks().forEach(tr => tr.stop()); micStream = null; }
+        if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }
+        analyser = null;
+        micSource = null;
+        isRunning = false;
+        isPaused = false;
+
+        startBtn.className = 'primary';
+        pauseBtn.disabled = true;
+        pauseBtn.classList.remove('active-toggle');
+        statusText.style.color = 'var(--text-muted)';
+        vuFill.style.width = '0%';
+        vuText.textContent = '-∞ dB';
+        vuClip.classList.remove('active');
+        applyLocalization();
+    }
+
+    function initAudioBuffers() {
+        if (!analyser) return;
+        const binCount = analyser.frequencyBinCount;
+        rawFreqData = new Float32Array(binCount);
+        timeData = new Float32Array(analyser.fftSize);
+        peakData = new Float32Array(binCount);
+        avgSumData = new Float64Array(binCount);
+        resetMeasurements();
+    }
+
+    function resetMeasurements() {
+        if (peakData) peakData.fill(-140);
+        if (avgSumData) avgSumData.fill(0);
+        avgCount = 0;
+        dispPeak.fill(settings.minDb);
+        dispAvg.fill(settings.minDb);
+        if (!isRunning || isPaused) renderFrame();
+    }
+
+    // ================= DSP & SMOOTHING =================
+    function computeSmoothedCurve(srcBins, outGrid, sampleRate, octFraction, applyPinkTilt) {
+        const binCount = srcBins.length;
+        const binHz = (sampleRate / 2) / binCount;
+        const halfFactor = octFraction > 0 ? Math.pow(2, 1 / (2 * octFraction)) : 1;
+
+        for (let i = 0; i < GRID_POINTS; i++) {
+            const f = gridFreqs[i];
+            let val;
+
+            if (octFraction <= 0) {
+                const exactBin = f / binHz;
+                const b0 = Math.max(0, Math.min(binCount - 1, Math.floor(exactBin)));
+                const b1 = Math.min(binCount - 1, b0 + 1);
+                const frac = exactBin - b0;
+                const v0 = isFinite(srcBins[b0]) ? srcBins[b0] : -140;
+                const v1 = isFinite(srcBins[b1]) ? srcBins[b1] : -140;
+                val = v0 + (v1 - v0) * frac;
+            } else {
+                const bStart = Math.max(1, Math.floor((f / halfFactor) / binHz));
+                const bEnd = Math.min(binCount - 1, Math.ceil((f * halfFactor) / binHz));
+
+                if (bEnd <= bStart) {
+                    const b = Math.max(0, Math.min(binCount - 1, Math.round(f / binHz)));
+                    val = isFinite(srcBins[b]) ? srcBins[b] : -140;
+                } else {
+                    let sumPow = 0;
+                    let count = 0;
+                    for (let b = bStart; b <= bEnd; b++) {
+                        const db = srcBins[b];
+                        sumPow += (isFinite(db) && db > -140) ? Math.pow(10, db / 10) : 1e-14;
+                        count++;
+                    }
+                    val = 10 * Math.log10(sumPow / count);
+                }
+            }
+
+            if (applyPinkTilt) val += 3.0103 * Math.log2(f / 1000);
+            if (calData) val += calGridOffsets[i];
+            outGrid[i] = val;
+        }
+    }
+
+    // ================= MAIN LOOP =================
+    function loop() {
+        if (!isRunning) return;
+        animId = requestAnimationFrame(loop);
+
+        if (!isPaused && analyser) {
+            analyser.getFloatFrequencyData(rawFreqData);
+            analyser.getFloatTimeDomainData(timeData);
+
+            let sumSq = 0, maxAbs = 0;
+            for (let i = 0; i < timeData.length; i++) {
+                const s = timeData[i];
+                sumSq += s * s;
+                const a = Math.abs(s);
+                if (a > maxAbs) maxAbs = a;
+            }
+            const rms = Math.sqrt(sumSq / timeData.length);
+            const rmsDb = rms > 1e-7 ? 20 * Math.log10(rms) : -100;
+            vuFill.style.width = Math.max(0, Math.min(100, ((rmsDb + 60) / 60) * 100)) + '%';
+            vuText.textContent = rmsDb > -99 ? rmsDb.toFixed(1) + ' dB' : '-∞ dB';
+            vuClip.classList.toggle('active', maxAbs >= 0.98);
+
+            const binCount = rawFreqData.length;
+            const decay = settings.peakMode === 'decay' ? 0.15 : 0;
+            avgCount++;
+
+            let maxBinVal = -140, maxBinIdx = 0;
+            const sr = audioCtx.sampleRate;
+            const binHz = (sr / 2) / binCount;
+
+            for (let i = 0; i < binCount; i++) {
+                const v = isFinite(rawFreqData[i]) ? rawFreqData[i] : -140;
+                if (v > peakData[i]) peakData[i] = v;
+                else if (decay > 0) peakData[i] = Math.max(v, peakData[i] - decay);
+                avgSumData[i] += v;
+
+                const f = i * binHz;
+                if (f >= settings.minFreq && f <= settings.maxFreq && v > maxBinVal) {
+                    maxBinVal = v;
+                    maxBinIdx = i;
+                }
+            }
+
+            if (maxBinVal > settings.minDb + 5) {
+                const domF = maxBinIdx * binHz;
+                domFreqText.textContent = `${formatFreq(domF)} (${freqToNote(domF)}) · ${maxBinVal.toFixed(1)} dB`;
+            } else {
+                domFreqText.textContent = '—';
+            }
+
+            const avgArr = new Float32Array(binCount);
+            const invCount = 1 / avgCount;
+            for (let i = 0; i < binCount; i++) avgArr[i] = avgSumData[i] * invCount;
+
+            computeSmoothedCurve(rawFreqData, dispLive, sr, settings.octSmooth, settings.pinkTilt);
+            computeSmoothedCurve(peakData, dispPeak, sr, settings.octSmooth, settings.pinkTilt);
+            computeSmoothedCurve(avgArr, dispAvg, sr, settings.octSmooth, settings.pinkTilt);
+        }
+
+        renderFrame();
+    }
+
+    // ================= RENDERING =================
+    const BAND_RANGES = [
+        { min: 20, max: 60, color: 'rgba(139, 92, 246, 0.05)' },
+        { min: 60, max: 250, color: 'rgba(59, 130, 246, 0.04)' },
+        { min: 250, max: 500, color: 'rgba(16, 185, 129, 0.035)' },
+        { min: 500, max: 2000, color: 'rgba(245, 158, 11, 0.035)' },
+        { min: 2000, max: 4000, color: 'rgba(239, 68, 68, 0.035)' },
+        { min: 4000, max: 6000, color: 'rgba(236, 72, 153, 0.035)' },
+        { min: 6000, max: 20000, color: 'rgba(6, 182, 212, 0.04)' }
+    ];
+
+    function renderFrame() {
+        const plotW = canvasW - PAD.left - PAD.right;
+        const plotH = canvasH - PAD.top - PAD.bottom;
+
+        ctx.fillStyle = '#07090d';
+        ctx.fillRect(0, 0, canvasW, canvasH);
+
+        ctx.fillStyle = '#0a0d14';
+        ctx.fillRect(PAD.left, PAD.top, plotW, plotH);
+
+        // Bands
+        if (settings.showBands) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(PAD.left, PAD.top, plotW, plotH);
+            ctx.clip();
+            ctx.font = '10px Segoe UI, sans-serif';
+            ctx.textAlign = 'center';
+            const bandNames = t('bands');
+            BAND_RANGES.forEach((b, idx) => {
+                if (b.max < settings.minFreq || b.min > settings.maxFreq) return;
+                const x1 = getX(Math.max(b.min, settings.minFreq));
+                const x2 = getX(Math.min(b.max, settings.maxFreq));
+                ctx.fillStyle = b.color;
+                ctx.fillRect(x1, PAD.top, x2 - x1, plotH);
+                if (x2 - x1 > 34) {
+                    ctx.fillStyle = 'rgba(150, 165, 190, 0.45)';
+                    ctx.fillText(bandNames[idx] || '', (x1 + x2) / 2, PAD.top + 13);
+                }
+            });
+            ctx.restore();
+        }
+
+        // Frequency Grid
+        const majorFreqs = [10, 20, 30, 50, 100, 200, 300, 500, 1000, 2000, 3000, 5000, 10000, 15000, 20000];
+        const minorFreqs = [15, 40, 60, 70, 80, 90, 400, 600, 700, 800, 900, 4000, 6000, 7000, 8000, 9000];
+
+        ctx.lineWidth = 1;
+        minorFreqs.forEach(f => {
+            if (f <= settings.minFreq || f >= settings.maxFreq) return;
+            const x = Math.round(getX(f)) + 0.5;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.035)';
+            ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, PAD.top + plotH); ctx.stroke();
+        });
+
+        ctx.font = '11px Segoe UI, sans-serif';
+        ctx.textAlign = 'center';
+        majorFreqs.forEach(f => {
+            if (f < settings.minFreq || f > settings.maxFreq) return;
+            const x = Math.round(getX(f)) + 0.5;
+            ctx.strokeStyle = (f === 100 || f === 1000 || f === 10000) ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.07)';
+            ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, PAD.top + plotH); ctx.stroke();
+            ctx.fillStyle = '#7e8ba3';
+            ctx.fillText(f >= 1000 ? (f / 1000) + 'k' : f, x, canvasH - 12);
+        });
+
+        // dB Grid
+        const dbSpan = settings.maxDb - settings.minDb;
+        const dbStep = dbSpan <= 40 ? 5 : 10;
+        ctx.textAlign = 'right';
+        for (let db = Math.ceil(settings.minDb / dbStep) * dbStep; db <= settings.maxDb; db += dbStep) {
+            const y = Math.round(getY(db)) + 0.5;
+            ctx.strokeStyle = db === 0 ? 'rgba(255, 71, 87, 0.35)' : 'rgba(255, 255, 255, 0.07)';
+            ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left + plotW, y); ctx.stroke();
+            ctx.fillStyle = '#7e8ba3';
+            ctx.fillText(db + ' dB', PAD.left - 8, y + 4);
+        }
+
+        ctx.strokeStyle = '#252e40';
+        ctx.strokeRect(PAD.left + 0.5, PAD.top + 0.5, plotW, plotH);
+
+        // Plot Clip
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(PAD.left, PAD.top, plotW, plotH);
+        ctx.clip();
+
+        if ((settings.viewMode === 'bars' || settings.viewMode === 'both') && curveVis.live) {
+            drawOctaveBars(dispLive, plotH);
+        }
+
+        snapshots.forEach(snap => {
+            if (snap.visible) drawCurve(snap.data, snap.color, 1.8, false, [5, 4]);
+        });
+
+        if (curveVis.avg && avgCount > 0) drawCurve(dispAvg, 'rgba(0, 212, 255, 0.9)', 2, false);
+        if (curveVis.live && (settings.viewMode === 'line' || settings.viewMode === 'both')) {
+            drawCurve(dispLive, 'rgba(0, 230, 118, 0.85)', 1.6, true);
+        }
+        if (curveVis.peak) drawCurve(dispPeak, 'rgba(255, 202, 40, 0.95)', 2.4, false);
+
+        // Target Curve
+        if (settings.targetCurve !== 'none') {
+            ctx.beginPath();
+            for (let i = 0; i < GRID_POINTS; i++) {
+                const x = getX(gridFreqs[i]);
+                const y = getY(getTargetDbAt(gridFreqs[i]));
+                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([7, 5]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            const labelY = getY(getTargetDbAt(settings.maxFreq * 0.8));
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+            ctx.font = '10.5px Segoe UI, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(`${settings.targetCurve.toUpperCase()} (${settings.targetOffsetDb.toFixed(1)} dB · ${t('targetDragHint')})`, PAD.left + plotW - 8, labelY - 6);
+        }
+
+        // Peak Markers (Top 3 resonances)
+        if (settings.showPeakMarkers && (curveVis.peak || curveVis.live)) {
+            drawPeakMarkers(curveVis.peak ? dispPeak : dispLive);
+        }
+
+        // Crosshair
+        if (mouse.inside && mouse.x >= PAD.left && mouse.x <= PAD.left + plotW && mouse.y >= PAD.top && mouse.y <= PAD.top + plotH) {
+            const mx = Math.round(mouse.x) + 0.5;
+            const my = Math.round(mouse.y) + 0.5;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.28)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath();
+            ctx.moveTo(mx, PAD.top); ctx.lineTo(mx, PAD.top + plotH);
+            ctx.moveTo(PAD.left, my); ctx.lineTo(PAD.left + plotW, my);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            updateTooltip();
+        }
+
+        ctx.restore();
+    }
+
+    function drawPeakMarkers(dataArr) {
+        const peaks = [];
+        const win = 18;
+        for (let i = win; i < GRID_POINTS - win; i++) {
+            const v = dataArr[i];
+            if (v <= settings.minDb + 10) continue;
+            let isMax = true;
+            for (let j = i - win; j <= i + win; j++) {
+                if (dataArr[j] > v) { isMax = false; break; }
+            }
+            if (isMax) peaks.push({ idx: i, val: v, f: gridFreqs[i] });
+        }
+        peaks.sort((a, b) => b.val - a.val);
+        const top = peaks.slice(0, 3);
+
+        ctx.font = '10.5px Segoe UI, sans-serif';
+        ctx.textAlign = 'center';
+        top.forEach(p => {
+            const x = getX(p.f);
+            const y = getY(p.val);
+            ctx.fillStyle = '#ffca28';
+            ctx.beginPath();
+            ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            const label = `${formatFreq(p.f)} (${p.val.toFixed(1)})`;
+            const tw = ctx.measureText(label).width + 8;
+            ctx.fillStyle = 'rgba(11, 14, 20, 0.85)';
+            ctx.fillRect(x - tw / 2, y - 22, tw, 16);
+            ctx.fillStyle = '#ffca28';
+            ctx.fillText(label, x, y - 10);
+        });
+    }
+
+    function drawCurve(dataArr, strokeColor, lineWidth, fillUnder, dash = null) {
+        const plotH = canvasH - PAD.top - PAD.bottom;
+        ctx.beginPath();
+        for (let i = 0; i < GRID_POINTS; i++) {
+            const x = getX(gridFreqs[i]);
+            const y = getY(dataArr[i]);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = lineWidth;
+        if (dash) ctx.setLineDash(dash);
+        ctx.stroke();
+        if (dash) ctx.setLineDash([]);
+
+        if (fillUnder) {
+            ctx.lineTo(getX(gridFreqs[GRID_POINTS - 1]), PAD.top + plotH);
+            ctx.lineTo(getX(gridFreqs[0]), PAD.top + plotH);
+            ctx.closePath();
+            const grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + plotH);
+            grad.addColorStop(0, 'rgba(0, 230, 118, 0.22)');
+            grad.addColorStop(1, 'rgba(0, 230, 118, 0.01)');
+            ctx.fillStyle = grad;
+            ctx.fill();
+        }
+    }
+
+    function drawOctaveBars(dataArr, plotH) {
+        const isoFreqs = [
+            20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500,
+            630, 800, 1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000,
+            10000, 12500, 16000, 20000
+        ];
+        const minL = Math.log10(settings.minFreq);
+        const maxL = Math.log10(settings.maxFreq);
+
+        isoFreqs.forEach(cf => {
+            if (cf < settings.minFreq || cf > settings.maxFreq) return;
+            const x1 = getX(cf / Math.pow(2, 1 / 6)) + 1.5;
+            const x2 = getX(cf * Math.pow(2, 1 / 6)) - 1.5;
+            const w = Math.max(2, x2 - x1);
+            const idx = Math.round(((Math.log10(cf) - minL) / (maxL - minL)) * (GRID_POINTS - 1));
+            const db = dataArr[Math.max(0, Math.min(GRID_POINTS - 1, idx))];
+            const y = getY(db);
+            const h = (PAD.top + plotH) - y;
+            if (h > 1) {
+                ctx.fillStyle = 'rgba(0, 230, 118, 0.32)';
+                ctx.fillRect(x1, y, w, h);
+                ctx.fillStyle = 'rgba(0, 230, 118, 0.85)';
+                ctx.fillRect(x1, y, w, 2);
+            }
+        });
+    }
+
+    function updateTooltip() {
+        const freq = getFreqFromX(mouse.x);
+        const cursorDb = getDbFromY(mouse.y);
+        const minL = Math.log10(settings.minFreq);
+        const maxL = Math.log10(settings.maxFreq);
+        const idx = Math.max(0, Math.min(GRID_POINTS - 1, Math.round(((Math.log10(freq) - minL) / (maxL - minL)) * (GRID_POINTS - 1))));
+
+        let html = `<div class="tooltip-freq"><span>${formatFreq(freq)}</span><span style="color:var(--accent)">${freqToNote(freq)}</span></div>`;
+        html += `<div class="tooltip-row"><span style="color:var(--text-muted)">${t('tooltipCursor')}</span><span>${cursorDb.toFixed(1)} dB</span></div>`;
+        if (curveVis.live) html += `<div class="tooltip-row"><span style="color:var(--green)">${t('legLive')}:</span><span>${dispLive[idx].toFixed(1)} dB</span></div>`;
+        if (curveVis.peak) html += `<div class="tooltip-row"><span style="color:var(--yellow)">${t('legPeak')}:</span><span>${dispPeak[idx].toFixed(1)} dB</span></div>`;
+        if (curveVis.avg && avgCount > 0) html += `<div class="tooltip-row"><span style="color:var(--cyan)">${t('legAvg')}:</span><span>${dispAvg[idx].toFixed(1)} dB</span></div>`;
+
+        cursorTooltip.innerHTML = html;
+        cursorTooltip.style.display = 'block';
+        const tw = cursorTooltip.offsetWidth, th = cursorTooltip.offsetHeight;
+        let tx = mouse.x + 14, ty = mouse.y + 14;
+        if (tx + tw > canvasW - 10) tx = mouse.x - tw - 14;
+        if (ty + th > canvasH - 10) ty = mouse.y - th - 14;
+        cursorTooltip.style.left = tx + 'px';
+        cursorTooltip.style.top = ty + 'px';
+    }
+
+    // ================= MOUSE & ZOOM INTERACTION =================
+    canvas.addEventListener('mousemove', e => {
+        const rect = canvas.getBoundingClientRect();
+        mouse.x = e.clientX - rect.left;
+        mouse.y = e.clientY - rect.top;
+        mouse.inside = true;
+
+        if (draggingTarget && settings.targetCurve !== 'none') {
+            settings.targetOffsetDb = Math.max(settings.minDb, Math.min(settings.maxDb, getDbFromY(mouse.y)));
+            saveSettings();
+        }
+        if (!isRunning || isPaused) renderFrame();
+    });
+
+    canvas.addEventListener('mousedown', e => {
+        if (settings.targetCurve === 'none') return;
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const targetY = getY(getTargetDbAt(getFreqFromX(mx)));
+        if (Math.abs(my - targetY) < 16) draggingTarget = true;
+    });
+
+    window.addEventListener('mouseup', () => { draggingTarget = false; });
+
+    canvas.addEventListener('mouseleave', () => {
+        mouse.inside = false;
+        cursorTooltip.style.display = 'none';
+        if (!isRunning || isPaused) renderFrame();
+    });
+
+    // Wheel zoom dB scale
+    canvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        const step = e.deltaY > 0 ? 5 : -5;
+        const newMin = Math.max(-120, Math.min(-50, settings.minDb - step));
+        const newMax = Math.max(-40, Math.min(0, settings.maxDb + step));
+        if (newMax - newMin >= 20) {
+            settings.minDb = newMin;
+            settings.maxDb = newMax;
+            minDbRange.value = newMin; minDbVal.textContent = newMin;
+            maxDbRange.value = newMax; maxDbVal.textContent = newMax;
+            saveSettings();
+            if (!isRunning || isPaused) renderFrame();
+        }
+    }, { passive: false });
+
+    // Double-click to reset scale
+    canvas.addEventListener('dblclick', () => {
+        settings.minDb = -100; settings.maxDb = -10;
+        settings.minFreq = 20; settings.maxFreq = 20000;
+        minDbRange.value = -100; minDbVal.textContent = -100;
+        maxDbRange.value = -10; maxDbVal.textContent = -10;
+        freqPresetSelect.value = '20-20000';
+        rebuildGridFreqs();
+        saveSettings();
+        if (!isRunning || isPaused) renderFrame();
+    });
+
+    // ================= CALIBRATION FILE (.cal) =================
+    loadCalBtn.addEventListener('click', () => calFileInput.click());
+    calFileInput.addEventListener('change', e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => {
+            const lines = ev.target.result.split(/\r?\n/);
+            const parsed = [];
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || trimmed.startsWith('*') || trimmed.startsWith('#') || trimmed.startsWith(';')) continue;
+                const parts = trimmed.split(/[\s,;]+/);
+                if (parts.length >= 2) {
+                    const f = parseFloat(parts[0]);
+                    const db = parseFloat(parts[1]);
+                    if (isFinite(f) && isFinite(db) && f > 0) parsed.push({ f, db });
+                }
+            }
+            if (parsed.length < 2) {
+                alert(t('calError'));
+                return;
+            }
+            parsed.sort((a, b) => a.f - b.f);
+            calData = parsed;
+            calName = file.name;
+            rebuildCalGrid();
+            renderCalBadge();
+            if (!isRunning || isPaused) renderFrame();
+        };
+        reader.readAsText(file);
+        calFileInput.value = '';
+    });
+
+    function renderCalBadge() {
+        if (!calData) { calBadgeArea.innerHTML = ''; return; }
+        calBadgeArea.innerHTML = `<span class="cal-badge"><span>${calName}</span><button class="snap-del" id="clearCalBtn" title="Remove">×</button></span>`;
+        document.getElementById('clearCalBtn').addEventListener('click', () => {
+            calData = null; calName = '';
+            rebuildCalGrid();
+            renderCalBadge();
+            if (!isRunning || isPaused) renderFrame();
+        });
+    }
+
+    // ================= SNAPSHOTS =================
+    function takeSnapshot() {
+        if (snapshots.length >= 4) snapshots.shift();
+        const color = SNAP_COLORS[snapshots.length % SNAP_COLORS.length];
+        const sourceCurve = avgCount > 0 && curveVis.peak ? dispPeak : dispLive;
+        const timeStr = new Date().toLocaleTimeString(lang === 'uk' ? 'uk-UA' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        snapshots.push({
+            id: Date.now(),
+            label: `${t('snapPrefix')} #${snapshots.length + 1} (${timeStr})`,
+            color,
+            visible: true,
+            data: new Float32Array(sourceCurve)
+        });
+        renderSnapshotsUI();
+        if (!isRunning || isPaused) renderFrame();
+    }
+
+    function renderSnapshotsUI() {
+        if (snapshots.length === 0) {
+            snapshotsList.innerHTML = `<span style="font-size:11.5px; color:var(--text-muted);">${t('snapEmpty')}</span>`;
+            return;
+        }
+        snapshotsList.innerHTML = '';
+        snapshots.forEach(s => {
+            const chip = document.createElement('div');
+            chip.className = 'snap-chip';
+            chip.innerHTML = `
+                <input type="checkbox" ${s.visible ? 'checked' : ''}>
+                <span class="dot" style="background:${s.color}"></span>
+                <span class="snap-name">${s.label}</span>
+                <button class="snap-del">×</button>
+            `;
+            chip.querySelector('input').addEventListener('change', ev => {
+                s.visible = ev.target.checked;
+                if (!isRunning || isPaused) renderFrame();
+            });
+            chip.querySelector('.snap-name').addEventListener('click', () => {
+                const next = prompt(t('renamePrompt'), s.label);
+                if (next && next.trim()) {
+                    s.label = next.trim();
+                    renderSnapshotsUI();
+                }
+            });
+            chip.querySelector('.snap-del').addEventListener('click', () => {
+                snapshots = snapshots.filter(item => item.id !== s.id);
+                renderSnapshotsUI();
+                if (!isRunning || isPaused) renderFrame();
+            });
+            snapshotsList.appendChild(chip);
+        });
+    }
+
+    // ================= SIGNAL GENERATOR =================
+    function stopGenerator() {
+        if (sweepTimer) { clearTimeout(sweepTimer); sweepTimer = null; }
+        if (genNodes) {
+            try { genNodes.src.stop(); } catch(e) {}
+            try { genNodes.src.disconnect(); } catch(e) {}
+            try { genNodes.gain.disconnect(); } catch(e) {}
+            genNodes = null;
+        }
+        genRunning = false;
+        genToggleBtn.textContent = t('btnGenStart');
+        genToggleBtn.classList.remove('danger');
+    }
+
+    function startGenerator() {
+        if (genRunning) { stopGenerator(); return; }
+        if (!genCtx) genCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (genCtx.state === 'suspended') genCtx.resume();
+
+        const type = genTypeSelect.value;
+        const gain = genCtx.createGain();
+        gain.gain.value = Math.pow(10, Number(genVolRange.value) / 20);
+        gain.connect(genCtx.destination);
+
+        let src;
+        if (type === 'white' || type === 'pink') {
+            const bufLen = genCtx.sampleRate * 4;
+            const buffer = genCtx.createBuffer(1, bufLen, genCtx.sampleRate);
+            const ch = buffer.getChannelData(0);
+            if (type === 'white') {
+                for (let i = 0; i < bufLen; i++) ch[i] = Math.random() * 2 - 1;
+            } else {
+                let b0=0, b1=0, b2=0, b3=0, b4=0, b5=0, b6=0;
+                for (let i = 0; i < bufLen; i++) {
+                    const white = Math.random() * 2 - 1;
+                    b0 = 0.99886 * b0 + white * 0.0555179;
+                    b1 = 0.99332 * b1 + white * 0.0750759;
+                    b2 = 0.96900 * b2 + white * 0.1538520;
+                    b3 = 0.86650 * b3 + white * 0.3104856;
+                    b4 = 0.55000 * b4 + white * 0.5329522;
+                    b5 = -0.7616 * b5 - white * 0.0168980;
+                    ch[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11;
+                    b6 = white * 0.115926;
+                }
+            }
+            src = genCtx.createBufferSource();
+            src.buffer = buffer;
+            src.loop = true;
+            src.connect(gain);
+            src.start();
+        } else if (type === 'sine') {
+            src = genCtx.createOscillator();
+            src.type = 'sine';
+            src.frequency.value = Number(genFreqRange.value);
+            src.connect(gain);
+            src.start();
+        } else if (type === 'sweep') {
+            if (autoResetSweepCheck.checked) resetMeasurements();
+            const dur = Number(sweepDurSelect.value);
+            src = genCtx.createOscillator();
+            src.type = 'sine';
+            const now = genCtx.currentTime;
+            src.frequency.setValueAtTime(20, now);
+            src.frequency.exponentialRampToValueAtTime(20000, now + dur);
+            src.connect(gain);
+            src.start(now);
+            src.stop(now + dur);
+            sweepTimer = setTimeout(stopGenerator, dur * 1000 + 100);
+        }
+
+        genNodes = { src, gain, type };
+        genRunning = true;
+        genToggleBtn.textContent = t('btnGenStop');
+        genToggleBtn.classList.add('danger');
+    }
+
+    // ================= EXPORT =================
+    exportPngBtn.addEventListener('click', () => {
+        const link = document.createElement('a');
+        link.download = `RTA-ACHX-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    });
+
+    exportCsvBtn.addEventListener('click', () => {
+        let csv = 'Frequency_Hz,Live_dB,Peak_dB,Average_dB\n';
+        for (let i = 0; i < GRID_POINTS; i++) {
+            csv += `${gridFreqs[i].toFixed(2)},${dispLive[i].toFixed(2)},${dispPeak[i].toFixed(2)},${dispAvg[i].toFixed(2)}\n`;
+        }
+        const link = document.createElement('a');
+        link.download = `RTA-ACHX-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`;
+        link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+        link.click();
+    });
+
+    // ================= EVENT LISTENERS =================
+    startBtn.addEventListener('click', startMic);
+
+    pauseBtn.addEventListener('click', () => {
+        if (!isRunning) return;
+        isPaused = !isPaused;
+        pauseBtn.classList.toggle('active-toggle', isPaused);
+        statusText.style.color = isPaused ? 'var(--yellow)' : 'var(--green)';
+        applyLocalization();
+    });
+
+    resetBtn.addEventListener('click', resetMeasurements);
+    snapBtn.addEventListener('click', takeSnapshot);
+
+    toggleDeckBtn.addEventListener('click', () => {
+        controlDeck.classList.toggle('collapsed');
+        toggleDeckBtn.classList.toggle('active-toggle', !controlDeck.classList.contains('collapsed'));
+        resizeCanvas();
+    });
+
+    langBtn.addEventListener('click', () => {
+        lang = lang === 'uk' ? 'en' : 'uk';
+        settings.lang = lang;
+        saveSettings();
+        applyLocalization();
+    });
+
+    helpBtn.addEventListener('click', () => helpModal.classList.add('open'));
+    closeHelpBtn.addEventListener('click', () => helpModal.classList.remove('open'));
+    helpModal.addEventListener('click', e => { if (e.target === helpModal) helpModal.classList.remove('open'); });
+
+    fullscreenBtn.addEventListener('click', () => {
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+        else document.exitFullscreen().catch(() => {});
+    });
+
+    document.querySelectorAll('.legend-item').forEach(el => {
+        el.addEventListener('click', () => {
+            const key = el.dataset.curve;
+            curveVis[key] = !curveVis[key];
+            el.classList.toggle('muted', !curveVis[key]);
+            if (!isRunning || isPaused) renderFrame();
+        });
+    });
+
+    fftSelect.addEventListener('change', () => {
+        settings.fftSize = Number(fftSelect.value);
+        saveSettings();
+        if (analyser) {
+            analyser.fftSize = settings.fftSize;
+            initAudioBuffers();
+            resText.textContent = (audioCtx.sampleRate / analyser.fftSize).toFixed(1) + ' Hz/bin';
+        }
+    });
+
+    octSmoothSelect.addEventListener('change', () => { settings.octSmooth = Number(octSmoothSelect.value); saveSettings(); });
+
+    timeSmoothRange.addEventListener('input', () => {
+        settings.timeSmooth = Number(timeSmoothRange.value);
+        timeSmoothVal.textContent = settings.timeSmooth.toFixed(2);
+        if (analyser) analyser.smoothingTimeConstant = settings.timeSmooth;
+        saveSettings();
+    });
+
+    pinkTiltCheck.addEventListener('change', () => { settings.pinkTilt = pinkTiltCheck.checked; saveSettings(); });
+    viewModeSelect.addEventListener('change', () => { settings.viewMode = viewModeSelect.value; saveSettings(); if (!isRunning || isPaused) renderFrame(); });
+    peakModeSelect.addEventListener('change', () => { settings.peakMode = peakModeSelect.value; saveSettings(); });
+    targetCurveSelect.addEventListener('change', () => { settings.targetCurve = targetCurveSelect.value; saveSettings(); if (!isRunning || isPaused) renderFrame(); });
+    bandsCheck.addEventListener('change', () => { settings.showBands = bandsCheck.checked; saveSettings(); if (!isRunning || isPaused) renderFrame(); });
+    peakMarkersCheck.addEventListener('change', () => { settings.showPeakMarkers = peakMarkersCheck.checked; saveSettings(); if (!isRunning || isPaused) renderFrame(); });
+
+    freqPresetSelect.addEventListener('change', () => {
+        const [mn, mx] = freqPresetSelect.value.split('-').map(Number);
+        settings.minFreq = mn; settings.maxFreq = mx;
+        rebuildGridFreqs();
+        saveSettings();
+        if (!isRunning || isPaused) renderFrame();
+    });
+
+    minDbRange.addEventListener('input', () => {
+        let v = Math.min(Number(minDbRange.value), settings.maxDb - 10);
+        settings.minDb = v; minDbRange.value = v; minDbVal.textContent = v;
+        saveSettings(); if (!isRunning || isPaused) renderFrame();
+    });
+
+    maxDbRange.addEventListener('input', () => {
+        let v = Math.max(Number(maxDbRange.value), settings.minDb + 10);
+        settings.maxDb = v; maxDbRange.value = v; maxDbVal.textContent = v;
+        saveSettings(); if (!isRunning || isPaused) renderFrame();
+    });
+
+    genTypeSelect.addEventListener('change', () => {
+        const tp = genTypeSelect.value;
+        genFreqField.style.display = tp === 'sine' ? 'flex' : 'none';
+        genSweepField.style.display = tp === 'sweep' ? 'flex' : 'none';
+        if (genRunning) { stopGenerator(); startGenerator(); }
+    });
+
+    genToggleBtn.addEventListener('click', startGenerator);
+
+    genFreqRange.addEventListener('input', () => {
+        const f = Number(genFreqRange.value);
+        genFreqVal.textContent = f + ' Hz';
+        if (genRunning && genNodes && genNodes.type === 'sine') {
+            genNodes.src.frequency.setTargetAtTime(f, genCtx.currentTime, 0.02);
+        }
+    });
+
+    genVolRange.addEventListener('input', () => {
+        const db = Number(genVolRange.value);
+        genVolVal.textContent = db + ' dB';
+        if (genRunning && genNodes) {
+            genNodes.gain.gain.setTargetAtTime(Math.pow(10, db / 20), genCtx.currentTime, 0.02);
+        }
+    });
+
+    window.addEventListener('keydown', e => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+        if (e.key === 'Escape') { helpModal.classList.remove('open'); return; }
+        const k = e.key.toLowerCase();
+        if (e.code === 'Space') { e.preventDefault(); pauseBtn.click(); }
+        else if (k === 'r' || k === 'к') resetMeasurements();
+        else if (k === 's' || k === 'і') takeSnapshot();
+        else if (k === 'm' || k === 'ь') startMic();
+        else if (k === 'f' || k === 'а') fullscreenBtn.click();
+    });
+
+    // ================= INIT =================
+    loadSettings();
+    rebuildGridFreqs();
+    populateMics();
+    applyLocalization();
+    resizeCanvas();
+})();
+</script>
+</body>
+</html>
